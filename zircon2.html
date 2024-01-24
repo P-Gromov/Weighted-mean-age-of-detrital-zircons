@@ -3,29 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Age of detrital zircons</title>
+    <meta title="Age of detrital zircons (by Petr Gromov, 2023)">
+    <title>Age of detrital zircons (by Petr Gromov, 2023)</title>
 </head>
 <body>
-<table><tr>
+<table align="top"><tr>
 <form id="intervalForm">
-   <td><textarea name="data" cols="20" rows="35"></textarea></td>
+   <td><b>Input (ages, 1sigma)</b><br><textarea name="data" cols="15" rows="30"></textarea></td>
    <td align="top">
-<p>This is a tool to calculate the weighted arithmetic mean age of detrital zircons.<br>Paste ages and sigma from Excel (first column - ages). Decimal separators “,” or “.”
-<br>Recommended number of entries - not more than 50.</p>
-<button type="button" onclick="calculateIntervals()"><b>Calculate the weighted arithmetic mean age</b></button>
-<p>The algorithm takes a youngest group of at least 4 zircons with overlapping intervals of age +/- 1sigma.</p>
+This is a tool to calculate the weighted arithmetic mean age of detrital zircons.<br>
+You should paste ages and sigma from Excel (first column - ages). Decimal separators should be “,” or “.”
+<br>Recommended number of entries - not more than 50. JavaScript must be enabled in your browser.<br>
+The algorithm takes a youngest cluster of 
+<select id="numIntervals">
+        <option value="2">2</option>
+        <option value="3" selected>3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+        <option value="11">11</option>
+        <option value="12">12</option>
+        <option value="13">13</option>
+</select>
+zircons overlapping in age at 1σ.<br><br>
+<button type="button" onclick="calculateIntervals()"><b>Calculate age</b></button><br><br>
+<b>Weighted arithmetic mean age = </b><br>
+    <textarea name="output2" cols="8" rows="1"></textarea> millions years ago (Ma)<br><br>
+<b>Found cluster:</b><br>
+    <textarea name="output1" cols="20" rows="6"></textarea><br>
+If the programm does not respond - reduce cluster size - <br>
+probably your data contains not enough zircons overlapping in age at 1σ.<br>
+<p><i>This method is described in the following paper (at page 117): <br>
+Dickinson, W.R., Gehrels, G.E., 2009. Use of U-Pb ages of detrital zircons to <br>
+infer maximum depositional ages of strata: a test against a Colorado Plateau <br>
+Mesozoic database. Earth and Planetary Science Letter 288, 115e125.<br>
+This is an offline web-page, which does not send your data anywhere out of your browser.<br>
+Opensource, freeware, v.1.1. Created by Petr Gromov</i></p>
 </td>
-</form>
-</tr></table>
-
-   
-    
-
+</form></tr></table>
 
 <script>
     function calculateIntervals() {
+        //document.forms["intervalForm"]["output1"].value = ""
+        //document.forms["intervalForm"]["output2"].value = ""
+
         // Step 1: Get input data from the form
         let inputData = document.forms["intervalForm"]["data"].value;
+        let numIntervalsToSearch = parseInt(document.getElementById("numIntervals").value, 10);
 
         // Step 2: Replace commas with periods as decimal separators
         inputData = inputData.replace(/,/g, '.');
@@ -42,21 +70,20 @@
         // Step 6: Recalculate first and second values of each interval independently
         intervals = intervals.map(interval => {
             const [value1, value2] = interval.split('-').map(parseFloat);
-
             const newValue1 = (value1 - value2).toFixed(2);
             const newValue2 = (value1 + value2).toFixed(2);
-
             return `${newValue1}-${newValue2}`;
         });
 
         // Additional Step: Round each value in the array to 2 digits after the decimal point
         intervals = intervals.map(interval => interval.replace(/(\d+\.\d+)/g, match => parseFloat(match).toFixed(2)));
 
-        // Step 7: Find 4 overlapping intervals
+        // Step 7: Find the specified number of overlapping intervals
         let foundGroup = null;
+        //let foundIntNum = 0
 
-        for (let i = 0; i < intervals.length - 3; i++) {
-            const group = [intervals[i], intervals[i + 1], intervals[i + 2], intervals[i + 3]];
+        for (let i = 0; i < intervals.length - (numIntervalsToSearch - 1); i++) {
+            const group = intervals.slice(i, i + numIntervalsToSearch);
 
             // Check if intervals overlap
             const overlaps = group.every(interval =>
@@ -64,30 +91,14 @@
                     intervalOverlap(interval, otherInterval)
                 )
             );
-
+        
             if (overlaps) {
                 foundGroup = group;
                 break;
-            }
+            } 
         }
 
-        // Step 8: Create core interval
-        let coreInt = null;
-
-        if (foundGroup) {
-            const startValues = foundGroup.map(interval => parseFloat(interval.split('-')[0]));
-            const endValues = foundGroup.map(interval => parseFloat(interval.split('-')[1]));
-
-            const maxStart = Math.max(...startValues);
-            const minEnd = Math.min(...endValues);
-
-            coreInt = `${maxStart}-${minEnd}`;
-
-            // Step 9: Find all other intervals overlapping with coreInt
-            const otherIntervals = intervals.filter(interval => interval !== coreInt && !foundGroup.includes(interval) && intervalOverlap(coreInt, interval));
-            foundGroup = foundGroup.concat(otherIntervals);
-
-            // Step 10: Calculate weighted arithmetic mean and round to 1 digit after the point
+        // Step 10: Calculate weighted arithmetic mean and round to 1 digit after the point
             const weightedSum = foundGroup.reduce((sum, interval) => {
                 const [start, end] = interval.split('-').map(parseFloat);
                 const weight = end - start;
@@ -100,22 +111,23 @@
             }, 0);
 
             const weightedArithmeticMean = totalWeight !== 0 ? (weightedSum / totalWeight).toFixed(1) : null;
-
+        // check is number of overlapping intervals is lees than requested by user
+        //foundIntNum = foundGroup.length
+        //if (foundIntNum < numIntervalsToSearch) {
+        //    alert("Try to select cluster size no more than " + foundIntNum);
+        //}
             // Step 11: Display results on the page
-            document.write("intervals=" + JSON.stringify(intervals) + "<br>");
-            document.write("foundGroup=" + JSON.stringify(foundGroup) + "<br>");
-            document.write("<b>Weighted arithmetic mean age = " + weightedArithmeticMean + " Ma</b><br><br>");
-        }
-    }
+            document.forms["intervalForm"]["output1"].value = JSON.stringify(foundGroup);
+            document.forms["intervalForm"]["output2"].value = weightedArithmeticMean;
+
+            } // end of function calculateIntervals()
 
     // Function to check if two intervals overlap
     function intervalOverlap(interval1, interval2) {
         const [start1, end1] = interval1.split('-').map(parseFloat);
         const [start2, end2] = interval2.split('-').map(parseFloat);
-
         return !(end1 < start2 || start1 > end2);
     }
 </script>
-
 </body>
 </html>
